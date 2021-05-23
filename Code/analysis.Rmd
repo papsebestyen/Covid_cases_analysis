@@ -1,0 +1,396 @@
+---
+title: "Öko beszámoló"
+author: "Hojsza Petra, Pap Sebestyén"
+date: "5/16/2021"
+output: html_document
+---
+
+```{r import, warning=FALSE, error=FALSE, results='hide', message=FALSE}
+library(dplyr)
+# library(ggplot2)
+# library(geojsonio)
+# library(broom)
+# library(ggnewscale)
+library(plm)
+library(lmtest)
+library(stargazer)
+library(ggplot2)
+library(broom)
+library(modelsummary)
+library(xlsx)
+```
+
+```{r}
+rm(list = ls())
+setwd("C:/Users/papse/Desktop/Beszámoló")
+load(file.path('Data', 'data_final.RData'))
+```
+
+```{r}
+date.filter <- function(date) date > as.Date('2020-02-16') & date < as.Date('2020-04-15')
+```
+```{r}
+cases.data <- left_join(data.covid, data.policy.timing, by = c('date' = 'Date', 'iso_code' = 'CountryCode')) %>% 
+  filter(date.filter(date))
+```
+
+```{r}
+cases.m1 <- cases.data %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.m1 <- coeftest(cases.m1, vcov = vcovHC, type = 'HC1', save = T)
+# stargazer(cases.m1, type = 'text')
+```
+
+```{r}
+cases.m2 <- plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date),
+      data = cases.data,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+# Nincs szükség time fixed effectre
+plmtest(cases.m2, c('time'), type=c("bp"))
+
+cases.m2 <- coeftest(cases.m2, vcov = vcovHC, type = 'HC1', save = T)
+# stargazer(cases.m1, cases.m2, type = 'text')
+```
+
+```{r}
+cases.m3 <- cases.data %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date) +
+        school +
+        workplace,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.m3 <- coeftest(cases.m3, vcov = vcovHC, type = 'HC1', save = T)
+# stargazer(cases.m1, cases.m2, cases.m3, type = 'text')
+```
+
+```{r}
+cases.m4 <- cases.data %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date) +
+        school +
+        workplace +
+        travel,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.m4 <- coeftest(cases.m4, vcov = vcovHC, type = 'HC1', save = T)
+# stargazer(cases.m1, cases.m2, cases.m3, cases.m4, type = 'text')
+```
+
+```{r}
+cases.m5 <- cases.data %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date) +
+        school +
+        workplace +
+        travel +
+        facial,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.m5 <- coeftest(cases.m5, vcov = vcovHC, type = 'HC1', save = T)
+# stargazer(cases.m1, cases.m2, cases.m3, cases.m4, cases.m5, type = 'text')
+```
+
+```{r}
+cases.data <- left_join(cases.data, data.weather, by = c('date' = 'time', 'iso_code' = 'ISO3166.1.Alpha.3'))
+```
+
+```{r}
+cases.m6 <- cases.data %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date) +
+        school +
+        workplace +
+        travel +
+        facial +
+        TEMP +
+        PRECIPITATION,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.m6 <- coeftest(cases.m6, vcov = vcovHC, type = 'HC1', save = T)
+# cases.m6 <- coeftest(cases.m6, function(x) vcovHC(x, type = 'sss'))
+# cases.m6 <- clubSandwich::coef_test(cases.m6, vcov = "CR1", cluster = "individual", test = "naive-t")
+# cases.m6 <- clubSandwich::coef_test(cases.m6, vcov = "CR2", cluster = "individual", test = "Satterthwaite")
+
+stargazer(cases.m1, cases.m2, cases.m3, cases.m4, cases.m5, cases.m6, type = 'text')
+```
+```{r}
+# 
+# 
+# 
+# ES1 <- summary(cases.m1)
+# ES1$coefficients[,2:4] <- test[,2:4]
+# 
+# coefs <- data.frame(ES1[["coefficients"]])
+# 
+# coefs$conf.low <- coefs$Estimate+c(-1)*coefs$Std..Error*qt(0.975,42)
+# coefs$conf.high <- coefs$Estimate+c(1)*coefs$Std..Error*qt(0.975,42)
+# coefs
+# interest <- c('pre_sipo_1_2TRUE', 'pre_sipo_3_4TRUE', 'pre_sipo_5_6TRUE', 'pre_sipo_7TRUE', 'sipo_0_5TRUE', 'sipo_6_9TRUE', 'sipo_10_14TRUE', 'sipo_15_19TRUE', 'sipo_20TRUE')
+# interest <- c('sipo_0_5TRUE', 'sipo_6_9TRUE', 'sipo_10_14TRUE', 'sipo_15_19TRUE', 'sipo_20TRUE')
+# coefs <- coefs[rownames(coefs) %in% interest,]
+# coefs$time <- c(0, 6, 10, 15, 20)
+# coefs
+# 
+# ggplot(coefs, aes(time, Estimate))+
+#            geom_line() +
+#            geom_point()+
+#            geom_pointrange(aes(ymin = conf.low, ymax = conf.high))+
+#            geom_hline(yintercept = 0, linetype = 2) +
+#   theme_bw()
+```
+
+```{r}
+mobility.data <- left_join(data.mobility, data.policy.timing, by = c('date' = 'Date', 'ISO3166.1.Alpha.3' = 'CountryCode')) %>% 
+  filter(date.filter(date))
+```
+
+```{r}
+mobility.m1 <- mobility.data %>% 
+  plm(residential_percent_change_from_baseline ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15,
+      data = .,
+      index = c('ISO3166.1.Alpha.3', 'date'),
+      model = 'within'
+      )
+
+mobility.m1 <- coeftest(mobility.m1, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(mobility.m1, type = 'text')
+```
+
+```{r}
+mobility.m2 <- mobility.data %>% 
+  plm(residential_percent_change_from_baseline ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(ISO3166.1.Alpha.3) : as.numeric(date),
+      data = .,
+      index = c('ISO3166.1.Alpha.3', 'date'),
+      model = 'within'
+      )
+
+mobility.m2 <- coeftest(mobility.m2, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(mobility.m1, mobility.m2, type = 'text')
+```
+
+```{r}
+mobility.m3 <- mobility.data %>% 
+  filter(date.filter(date)) %>% 
+  plm(residential_percent_change_from_baseline ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(ISO3166.1.Alpha.3) : as.numeric(date) +
+        school +
+        workplace,
+      data = .,
+      index = c('ISO3166.1.Alpha.3', 'date'),
+      model = 'within'
+      )
+
+mobility.m3 <- coeftest(mobility.m3, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(mobility.m1, mobility.m2, mobility.m3, type = 'text')
+```
+
+```{r}
+mobility.m4 <- mobility.data %>% 
+  plm(residential_percent_change_from_baseline ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(ISO3166.1.Alpha.3) : as.numeric(date) +
+        school +
+        workplace +
+        travel,
+      data = .,
+      index = c('ISO3166.1.Alpha.3', 'date'),
+      model = 'within'
+      )
+
+mobility.m4 <- coeftest(mobility.m4, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(mobility.m1, mobility.m2, mobility.m3, mobility.m4, type = 'text')
+```
+
+```{r}
+mobility.data <- left_join(mobility.data, data.weather, by = c('date' = 'time', 'ISO3166.1.Alpha.3' = 'ISO3166.1.Alpha.3'))
+```
+
+```{r}
+mobility.m5 <- mobility.data %>% 
+  plm(residential_percent_change_from_baseline ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(ISO3166.1.Alpha.3) : as.numeric(date) +
+        school +
+        workplace +
+        travel +
+        TEMP +
+        PRECIPITATION,
+      data = .,
+      index = c('ISO3166.1.Alpha.3', 'date'),
+      model = 'within'
+      )
+
+mobility.m5 <- coeftest(mobility.m5, vcov = vcovHC, type = 'HC1', save = T) 
+stargazer(mobility.m1, mobility.m2, mobility.m3, mobility.m4, mobility.m5, type = 'text')
+```
+```{r}
+tests.m1 <- cases.data %>% 
+  plm(log(total_tests_per_thousand) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+tests.m1 <- coeftest(tests.m1, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(tests.m1, type = 'text')
+```
+
+```{r}
+tests.m2 <- cases.data %>% 
+  plm(log(total_tests_per_thousand) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date),
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+tests.m2 <- coeftest(tests.m2, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(tests.m1, tests.m2, type = 'text')
+```
+
+```{r}
+tests.m3 <- cases.data %>% 
+  plm(log(total_tests_per_thousand) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date) +
+        testing_pol +
+        contact_trace,
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+tests.m3 <- coeftest(tests.m3, vcov = vcovHC, type = 'HC1', save = T) 
+stargazer(tests.m1, tests.m2, tests.m3, type = 'text')
+```
+
+```{r}
+cases.var.m1 <- cases.data %>% 
+  filter(population_density >= 65.180 & population_density <= 136.520) %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date),
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.var.m1 <- coeftest(cases.var.m1, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(cases.var.m1, type = 'text')
+```
+
+```{r}
+cases.var.m2 <- cases.data %>% 
+  filter(population >= 2722291 & population <= 11589616) %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date),
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.var.m2 <- coeftest(cases.var.m2, vcov = vcovHC, type = 'HC1', save = T) 
+# stargazer(cases.var.m1, cases.var.m2, type = 'text')
+```
+
+```{r}
+cases.var.m3 <- cases.data %>% 
+  filter(!(iso_code %in% c('AND', 'LUX', 'ISL', 'ESP', 'CHE', 'ITA', 'BEL', 'IRL'))) %>% 
+  plm(log(total_cases_per_million) ~
+        sipo_0_5 +
+        sipo_6_14 +
+        sipo_15 +
+        as.factor(iso_code):as.numeric(date),
+      data = .,
+      index = c('iso_code', 'date'),
+      model = 'within')
+
+cases.var.m3 <- coeftest(cases.var.m3, vcov = vcovHC, type = 'HC1', save = T) 
+stargazer(cases.var.m1, cases.var.m2, cases.var.m3, type = 'text')
+```
+```{r}
+library(modelsummary)
+write.xlsx(modelsummary(list(cases.m1, cases.m2, cases.m3, cases.m4, cases.m5, cases.m6), output = 'data.frame', stars = T),
+           file.path('Output', 'models.xlsx'),
+           sheetName="cases", 
+           col.names=TRUE, 
+           row.names=F, 
+           append=T)
+
+write.xlsx(modelsummary(list(mobility.m1, mobility.m2, mobility.m3, mobility.m4, mobility.m5), output = 'data.frame', stars = T),
+           file.path('Output', 'models.xlsx'),
+           sheetName="mobility", 
+           col.names=TRUE, 
+           row.names=F, 
+           append=T)
+
+write.xlsx(modelsummary(list(tests.m1, tests.m2, tests.m3), output = 'data.frame', stars = T),
+           file.path('Output', 'models.xlsx'),
+           sheetName="tests", 
+           col.names=TRUE, 
+           row.names=F, 
+           append=T)
+
+write.xlsx(modelsummary(list(cases.var.m1, cases.var.m2, cases.var.m3), output = 'data.frame', stars = T),
+           file.path('Output', 'models.xlsx'),
+           sheetName="cases_excluding", 
+           col.names=TRUE, 
+           row.names=F, 
+           append=T)
+```
